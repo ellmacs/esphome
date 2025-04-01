@@ -26,6 +26,7 @@ CONF_RGB_DATAPOINT = "rgb_datapoint"
 CONF_HSV_DATAPOINT = "hsv_datapoint"
 CONF_COLOR_DATAPOINT = "color_datapoint"
 CONF_COLOR_TYPE = "color_type"
+CONF_COLOR_TEMPERATURE_ENUM = "color_temperature_enum"
 
 TuyaColorType = tuya_ns.enum("TuyaColorType")
 
@@ -54,6 +55,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Inclusive(CONF_COLOR_DATAPOINT, "color"): cv.uint8_t,
             cv.Inclusive(CONF_COLOR_TYPE, "color"): cv.enum(COLOR_TYPES, upper=True),
             cv.Optional(CONF_COLOR_INTERLOCK, default=False): cv.boolean,
+            cv.Optional(CONF_COLOR_TEMPERATURE_ENUM, default=False): cv.boolean,
             cv.Inclusive(
                 CONF_COLOR_TEMPERATURE_DATAPOINT, "color_temperature"
             ): cv.uint8_t,
@@ -97,10 +99,12 @@ async def to_code(config):
     if CONF_COLOR_DATAPOINT in config:
         cg.add(var.set_color_id(config[CONF_COLOR_DATAPOINT]))
         cg.add(var.set_color_type(config[CONF_COLOR_TYPE]))
+    if CONF_COLOR_TEMPERATURE_ENUM in config:
+        cg.add(var.set_color_temperature_enum(config[CONF_COLOR_TEMPERATURE_ENUM]))
     if CONF_COLOR_TEMPERATURE_DATAPOINT in config:
         cg.add(var.set_color_temperature_id(config[CONF_COLOR_TEMPERATURE_DATAPOINT]))
         cg.add(var.set_color_temperature_invert(config[CONF_COLOR_TEMPERATURE_INVERT]))
-
+    
         cg.add(
             var.set_cold_white_temperature(config[CONF_COLD_WHITE_COLOR_TEMPERATURE])
         )
