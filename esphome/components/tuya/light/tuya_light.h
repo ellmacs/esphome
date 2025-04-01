@@ -25,6 +25,7 @@ class TuyaLight : public Component, public light::LightOutput {
   void set_color_id(uint8_t color_id) { this->color_id_ = color_id; }
   void set_color_type(TuyaColorType color_type) { this->color_type_ = color_type; }
   void set_color_temperature_id(uint8_t color_temperature_id) { this->color_temperature_id_ = color_temperature_id; }
+  void set_color_temperature_enum(bool color_temperature_enum) { this->color_temperature_enum_ = color_temperature_enum; }
   void set_color_temperature_invert(bool color_temperature_invert) {
     this->color_temperature_invert_ = color_temperature_invert;
   }
@@ -63,6 +64,7 @@ class TuyaLight : public Component, public light::LightOutput {
   float cold_white_temperature_;
   float warm_white_temperature_;
   bool color_temperature_invert_{false};
+  bool color_temperature_enum_{false};
   bool color_interlock_{false};
   light::LightState *state_{nullptr};
 };
