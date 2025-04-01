@@ -9,22 +9,29 @@ static const char *const TAG = "tuya.light";
 
 void TuyaLight::setup() {
   if (this->color_temperature_id_.has_value()) {
-    this->parent_->register_listener(*this->color_temperature_id_, [this](const TuyaDatapoint &datapoint) {
-      if (this->state_->current_values != this->state_->remote_values) {
-        ESP_LOGD(TAG, "Light is transitioning, datapoint change ignored");
+// In TuyaLight::setup(), after registering listener for color_temperature_id_
+this->parent_->register_listener(*this->color_temperature_id_, [this](const TuyaDatapoint &datapoint) {
+    if (this->state_->current_values != this->state_->remote_values) {
+        ESP_LOGD("tuya.light", "Light is transitioning, datapoint change ignored");
         return;
-      }
-
-      auto datapoint_value = datapoint.value_uint;
-      if (this->color_temperature_invert_) {
-        datapoint_value = this->color_temperature_max_value_ - datapoint_value;
-      }
-      auto call = this->state_->make_call();
-      call.set_color_temperature(this->cold_white_temperature_ +
-                                 (this->warm_white_temperature_ - this->cold_white_temperature_) *
-                                     (float(datapoint_value) / this->color_temperature_max_value_));
-      call.perform();
-    });
+    }
+    // Get the incoming value (use enum or uint depending on type)
+    uint32_t dp_value = datapoint.value_uint;
+    if (this->color_temperature_enum_) {
+        dp_value = datapoint.value_enum;  // read as 8-bit enum
+    }
+    if (this->color_temperature_invert_) {
+        dp_value = this->color_temperature_max_value_ - dp_value;
+    }
+    // Map 0-2 into actual color temperature and apply to state
+    float fraction = float(dp_value) / this->color_temperature_max_value_;
+    auto call = this->state_->make_call();
+    call.set_color_temperature(
+        this->cold_white_temperature_ +
+        (this->warm_white_temperature_ - this->cold_white_temperature_) * fraction
+    );
+    call.perform();
+});
   }
   if (this->dimmer_id_.has_value()) {
     this->parent_->register_listener(*this->dimmer_id_, [this](const TuyaDatapoint &datapoint) {
