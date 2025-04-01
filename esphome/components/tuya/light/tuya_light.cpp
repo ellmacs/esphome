@@ -169,13 +169,22 @@ void TuyaLight::write_state(light::LightState *state) {
   }
 
   if (brightness > 0.0f || !color_interlock_) {
-    if (this->color_temperature_id_.has_value()) {
-      uint32_t color_temp_int = static_cast<uint32_t>(roundf(color_temperature * this->color_temperature_max_value_));
-      if (this->color_temperature_invert_) {
+if (this->color_temperature_id_.has_value()) {
+    // Calculate the target enum value (0 to color_temperature_max_value_)
+    uint32_t color_temp_int = static_cast<uint32_t>(
+        roundf(color_temperature * this->color_temperature_max_value_));
+    if (this->color_temperature_invert_) {
         color_temp_int = this->color_temperature_max_value_ - color_temp_int;
-      }
-      this->parent_->set_integer_datapoint_value(*this->color_temperature_id_, color_temp_int);
     }
+    // Send as enum if configured, otherwise as integer
+    if (this->color_temperature_enum_) {
+        // Cast to uint8_t since enum datapoint is 1 byte
+        this->parent_->set_enum_datapoint_value(*this->color_temperature_id_, 
+                                               static_cast<uint8_t>(color_temp_int));
+    } else {
+        this->parent_->set_integer_datapoint_value(*this->color_temperature_id_, color_temp_int);
+    }
+}
 
     if (this->dimmer_id_.has_value()) {
       auto brightness_int = static_cast<uint32_t>(brightness * this->max_value_);
