@@ -31,6 +31,7 @@ from esphome.const import (
     KEY_TARGET_FRAMEWORK,
     KEY_TARGET_PLATFORM,
     PLATFORM_ESP32,
+    CoreModel,
     __version__,
 )
 from esphome.core import CORE, HexInt, TimePeriod
@@ -39,7 +40,7 @@ import esphome.final_validate as fv
 from esphome.helpers import copy_file_if_changed, mkdir_p, write_file_if_changed
 from esphome.types import ConfigType
 
-from .boards import BOARDS
+from .boards import BOARDS, STANDARD_BOARDS
 from .const import (  # noqa
     KEY_BOARD,
     KEY_COMPONENTS,
@@ -189,7 +190,7 @@ def get_download_types(storage_json):
     ]
 
 
-def only_on_variant(*, supported=None, unsupported=None):
+def only_on_variant(*, supported=None, unsupported=None, msg_prefix="This feature"):
     """Config validator for features only available on some ESP32 variants."""
     if supported is not None and not isinstance(supported, list):
         supported = [supported]
@@ -200,11 +201,11 @@ def only_on_variant(*, supported=None, unsupported=None):
         variant = get_esp32_variant()
         if supported is not None and variant not in supported:
             raise cv.Invalid(
-                f"This feature is only available on {', '.join(supported)}"
+                f"{msg_prefix} is only available on {', '.join(supported)}"
             )
         if unsupported is not None and variant in unsupported:
             raise cv.Invalid(
-                f"This feature is not available on {', '.join(unsupported)}"
+                f"{msg_prefix} is not available on {', '.join(unsupported)}"
             )
         return obj
 
@@ -309,19 +310,19 @@ def _format_framework_espidf_version(
 
 # The default/recommended arduino framework version
 #  - https://github.com/espressif/arduino-esp32/releases
-RECOMMENDED_ARDUINO_FRAMEWORK_VERSION = cv.Version(3, 1, 3)
+RECOMMENDED_ARDUINO_FRAMEWORK_VERSION = cv.Version(3, 2, 1)
 # The platform-espressif32 version to use for arduino frameworks
 #  - https://github.com/pioarduino/platform-espressif32/releases
-ARDUINO_PLATFORM_VERSION = cv.Version(53, 3, 13)
+ARDUINO_PLATFORM_VERSION = cv.Version(54, 3, 21)
 
 # The default/recommended esp-idf framework version
 #  - https://github.com/espressif/esp-idf/releases
 #  - https://api.registry.platformio.org/v3/packages/platformio/tool/framework-espidf
-RECOMMENDED_ESP_IDF_FRAMEWORK_VERSION = cv.Version(5, 3, 2)
+RECOMMENDED_ESP_IDF_FRAMEWORK_VERSION = cv.Version(5, 4, 2)
 # The platformio/espressif32 version to use for esp-idf frameworks
 #  - https://github.com/platformio/platform-espressif32/releases
 #  - https://api.registry.platformio.org/v3/packages/platformio/platform/espressif32
-ESP_IDF_PLATFORM_VERSION = cv.Version(53, 3, 13)
+ESP_IDF_PLATFORM_VERSION = cv.Version(54, 3, 21)
 
 # List based on https://registry.platformio.org/tools/platformio/framework-espidf/versions
 SUPPORTED_PLATFORMIO_ESP_IDF_5X = [
@@ -341,6 +342,7 @@ SUPPORTED_PLATFORMIO_ESP_IDF_5X = [
 # List based on https://github.com/pioarduino/esp-idf/releases
 SUPPORTED_PIOARDUINO_ESP_IDF_5X = [
     cv.Version(5, 5, 0),
+    cv.Version(5, 4, 2),
     cv.Version(5, 4, 1),
     cv.Version(5, 4, 0),
     cv.Version(5, 3, 3),
@@ -355,8 +357,8 @@ SUPPORTED_PIOARDUINO_ESP_IDF_5X = [
 def _arduino_check_versions(value):
     value = value.copy()
     lookups = {
-        "dev": (cv.Version(3, 1, 3), "https://github.com/espressif/arduino-esp32.git"),
-        "latest": (cv.Version(3, 1, 3), None),
+        "dev": (cv.Version(3, 2, 1), "https://github.com/espressif/arduino-esp32.git"),
+        "latest": (cv.Version(3, 2, 1), None),
         "recommended": (RECOMMENDED_ARDUINO_FRAMEWORK_VERSION, None),
     }
 
@@ -394,8 +396,8 @@ def _arduino_check_versions(value):
 def _esp_idf_check_versions(value):
     value = value.copy()
     lookups = {
-        "dev": (cv.Version(5, 3, 2), "https://github.com/espressif/esp-idf.git"),
-        "latest": (cv.Version(5, 3, 2), None),
+        "dev": (cv.Version(5, 4, 2), "https://github.com/espressif/esp-idf.git"),
+        "latest": (cv.Version(5, 2, 2), None),
         "recommended": (RECOMMENDED_ESP_IDF_FRAMEWORK_VERSION, None),
     }
 
@@ -410,8 +412,8 @@ def _esp_idf_check_versions(value):
         version = cv.Version.parse(cv.version_number(value[CONF_VERSION]))
         source = value.get(CONF_SOURCE, None)
 
-    if version < cv.Version(4, 0, 0):
-        raise cv.Invalid("Only ESP-IDF 4.0+ is supported.")
+    if version < cv.Version(5, 0, 0):
+        raise cv.Invalid("Only ESP-IDF 5.0+ is supported.")
 
     # flag this for later *before* we set value[CONF_PLATFORM_VERSION] below
     has_platform_ver = CONF_PLATFORM_VERSION in value
@@ -421,20 +423,15 @@ def _esp_idf_check_versions(value):
     )
 
     if (
-        (is_platformio := _platform_is_platformio(value[CONF_PLATFORM_VERSION]))
-        and version.major >= 5
-        and version not in SUPPORTED_PLATFORMIO_ESP_IDF_5X
-    ):
+        is_platformio := _platform_is_platformio(value[CONF_PLATFORM_VERSION])
+    ) and version not in SUPPORTED_PLATFORMIO_ESP_IDF_5X:
         raise cv.Invalid(
             f"ESP-IDF {str(version)} not supported by platformio/espressif32"
         )
 
     if (
-        version.major < 5
-        or (
-            version in SUPPORTED_PLATFORMIO_ESP_IDF_5X
-            and version not in SUPPORTED_PIOARDUINO_ESP_IDF_5X
-        )
+        version in SUPPORTED_PLATFORMIO_ESP_IDF_5X
+        and version not in SUPPORTED_PIOARDUINO_ESP_IDF_5X
     ) and not has_platform_ver:
         raise cv.Invalid(
             f"ESP-IDF {value[CONF_VERSION]} may be supported by platformio/espressif32; please specify '{CONF_PLATFORM_VERSION}'"
@@ -491,25 +488,32 @@ def _platform_is_platformio(value):
 
 
 def _detect_variant(value):
-    board = value[CONF_BOARD]
-    if board in BOARDS:
-        variant = BOARDS[board][KEY_VARIANT]
-        if CONF_VARIANT in value and variant != value[CONF_VARIANT]:
+    board = value.get(CONF_BOARD)
+    variant = value.get(CONF_VARIANT)
+    if variant and board is None:
+        # If variant is set, we can derive the board from it
+        # variant has already been validated against the known set
+        value = value.copy()
+        value[CONF_BOARD] = STANDARD_BOARDS[variant]
+    elif board in BOARDS:
+        variant = variant or BOARDS[board][KEY_VARIANT]
+        if variant != BOARDS[board][KEY_VARIANT]:
             raise cv.Invalid(
                 f"Option '{CONF_VARIANT}' does not match selected board.",
                 path=[CONF_VARIANT],
             )
         value = value.copy()
         value[CONF_VARIANT] = variant
+    elif not variant:
+        raise cv.Invalid(
+            "This board is unknown, if you are sure you want to compile with this board selection, "
+            f"override with option '{CONF_VARIANT}'",
+            path=[CONF_BOARD],
+        )
     else:
-        if CONF_VARIANT not in value:
-            raise cv.Invalid(
-                "This board is unknown, if you are sure you want to compile with this board selection, "
-                f"override with option '{CONF_VARIANT}'",
-                path=[CONF_BOARD],
-            )
         _LOGGER.warning(
-            "This board is unknown. Make sure the chosen chip component is correct.",
+            "This board is unknown; the specified variant '%s' will be used but this may not work as expected.",
+            variant,
         )
     return value
 
@@ -680,7 +684,7 @@ CONF_PARTITIONS = "partitions"
 CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
-            cv.Required(CONF_BOARD): cv.string_strict,
+            cv.Optional(CONF_BOARD): cv.string_strict,
             cv.Optional(CONF_CPU_FREQUENCY): cv.one_of(
                 *FULL_CPU_FREQUENCIES, upper=True
             ),
@@ -695,6 +699,7 @@ CONFIG_SCHEMA = cv.All(
     _detect_variant,
     _set_default_framework,
     set_core_data,
+    cv.has_at_least_one_key(CONF_BOARD, CONF_VARIANT),
 )
 
 
@@ -704,13 +709,15 @@ FINAL_VALIDATE_SCHEMA = cv.Schema(final_validate)
 async def to_code(config):
     cg.add_platformio_option("board", config[CONF_BOARD])
     cg.add_platformio_option("board_upload.flash_size", config[CONF_FLASH_SIZE])
-    cg.set_cpp_standard("gnu++17")
+    cg.set_cpp_standard("gnu++20")
     cg.add_build_flag("-DUSE_ESP32")
     cg.add_define("ESPHOME_BOARD", config[CONF_BOARD])
     cg.add_build_flag(f"-DUSE_ESP32_VARIANT_{config[CONF_VARIANT]}")
     cg.add_define("ESPHOME_VARIANT", VARIANT_FRIENDLY[config[CONF_VARIANT]])
+    cg.add_define(CoreModel.MULTI_ATOMICS)
 
     cg.add_platformio_option("lib_ldf_mode", "off")
+    cg.add_platformio_option("lib_compat_mode", "strict")
 
     framework_ver: cv.Version = CORE.data[KEY_CORE][KEY_FRAMEWORK_VERSION]
 
@@ -758,6 +765,9 @@ async def to_code(config):
         add_idf_sdkconfig_option("CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0", False)
         add_idf_sdkconfig_option("CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1", False)
 
+        # Disable dynamic log level control to save memory
+        add_idf_sdkconfig_option("CONFIG_LOG_DYNAMIC_LEVEL_CONTROL", False)
+
         # Set default CPU frequency
         add_idf_sdkconfig_option(f"CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_{freq}", True)
 
@@ -797,14 +807,9 @@ async def to_code(config):
 
         if advanced.get(CONF_IGNORE_EFUSE_MAC_CRC):
             add_idf_sdkconfig_option("CONFIG_ESP_MAC_IGNORE_MAC_CRC_ERROR", True)
-            if (framework_ver.major, framework_ver.minor) >= (4, 4):
-                add_idf_sdkconfig_option(
-                    "CONFIG_ESP_PHY_CALIBRATION_AND_DATA_STORAGE", False
-                )
-            else:
-                add_idf_sdkconfig_option(
-                    "CONFIG_ESP32_PHY_CALIBRATION_AND_DATA_STORAGE", False
-                )
+            add_idf_sdkconfig_option(
+                "CONFIG_ESP_PHY_CALIBRATION_AND_DATA_STORAGE", False
+            )
         if advanced.get(CONF_ENABLE_IDF_EXPERIMENTAL_FEATURES):
             _LOGGER.warning(
                 "Using experimental features in ESP-IDF may result in unexpected failures."
